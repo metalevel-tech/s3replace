@@ -24,7 +24,7 @@ It uses the AWS API to roll through all of the objects in a bucket:
 
 #### Configuration
 
-In _s3replace/XX.py_:
+In _s3replace/__main__.py_:
 - update the `needle_pattern` at the top. This pattern will be used by `re.search` to find matching documents and it'll be the content that is replaced using `re.sub`.
 - set `replace_with` at the top of the file to the text you want to replace the `needle_pattern` with
 - update the `key_pattern` variable to match the keys you want to run `needle_pattern` against; the more specific this is, the better; files that match this won't be downloaded, which is the slowest part of the process
