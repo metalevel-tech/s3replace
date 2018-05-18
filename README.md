@@ -31,7 +31,27 @@ In _s3replace/__main__.py_:
 
 #### Running
 
-`s3replace` runs as a command line tool. See all the options by running `s3replace help`. Basic usage only requires a bucket name and credentials:
+This runs as a command line tool. See all the options by running `python s3replace --help`:
+
+```
+$ python s3replace --help
+
+Find and replace for an S3 bucket.
+
+Usage:
+  s3replace <bucket> [--dry-run] [--access-key-id=<key>] [--secret-access-key=<key>]
+  s3replace -h | --help
+  s3replace --version
+
+Options:
+  -h --help                 Show this screen.
+  --version                 Show version.
+  --dry-run                 Don't replace.
+  --access-key-id=<key>     AWS access key ID
+  --secret-access-key=<key> AWS secret access key
+```
+
+Basic usage only requires a bucket name and credentials:
 
 ```sh
 $ python s3replace <bucket> --access-key-id=<yourid> --secret-access-key=<yourkey>
