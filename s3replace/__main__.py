@@ -33,9 +33,6 @@ from docopt import docopt
 # )
 # replace_with = '<script type="text/javascript" src="//interactives.dallasnews.com/common/templates/v1.1/js/meter.js"></script>'  # noqa
 
-
-
-# key_pattern = re.compile(r'.*00/.*\.html?', flags=re.IGNORECASE)
 key_pattern = re.compile(r'.*aserving/4/1/.*\.html?', flags=re.IGNORECASE)
 needle_pattern_max_count = 2
 needle_pattern = re.compile(
@@ -123,30 +120,26 @@ def search_bucket(bucket, dont_replace=False, force_replace=False):
                 sys.stdout.write('\n%s\n' % ('-' * 125))
                 sys.stdout.write('🌟  Match ("%s") found in "%s"\n' % (match_content[0], key.key))
 
-                for match in match_content:
-
-                    if dont_replace is True:
-                        continue
-
-                    if force_replace is True:
-                        sys.stdout.write('🚀  Replacing in "%s"\n\n' % key.key)
-                        save_backup(key.key, html)
-                        replace_key_content(
-                            key,
-                            needle_pattern.sub(replace_with, html, count=1)
-                        )
-                        continue
-
-
-                    if confirm('❓  Replace snippet in "%s"?' % key.key):
-                        sys.stdout.write('✅  Replacing in "%s"\n' % key.key)
-                        save_backup(key.key, html)
-                        replace_key_content(
-                            key,
-                            needle_pattern.sub(replace_with, html, count=needle_pattern_max_count)
-                        )
-                    else:
-                        sys.stdout.write('❌  Skipping in "%s"\n' % key.key)
+                # for match in match_content:
+                if dont_replace is True:
+                    continue
+                if force_replace is True:
+                    sys.stdout.write('🚀  Replacing in "%s"\n\n' % key.key)
+                    save_backup(key.key, html)
+                    replace_key_content(
+                        key,
+                        needle_pattern.sub(replace_with, html, count=needle_pattern_max_count)
+                    )
+                    continue
+                if confirm('❓  Replace snippet in "%s"?' % key.key):
+                    sys.stdout.write('✅  Replacing in "%s"\n' % key.key)
+                    save_backup(key.key, html)
+                    replace_key_content(
+                        key,
+                        needle_pattern.sub(replace_with, html, count=needle_pattern_max_count)
+                    )
+                else:
+                    sys.stdout.write('❌  Skipping in "%s"\n' % key.key)
         else:
             sys.stdout.write('\x1b[2K')
             sys.stdout.write('\r⏩  Skipping "%s"' % key.key)
