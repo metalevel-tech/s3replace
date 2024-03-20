@@ -26,6 +26,7 @@ from docopt import docopt
 
 # Complex example
 # key_pattern = re.compile(r'.*\.html', flags=re.IGNORECASE)
+# needle_pattern_max_count = 1
 # needle_pattern = re.compile(
 #     r'<script .*[\n\r]{0,2}.*https?://s?res\.dallasnews\.com/reg/js/tp_jsinclude\.js.*[\n\r]{0,2}\s*</script>',  # noqa
 #     flags=re.IGNORECASE | re.MULTILINE
@@ -34,8 +35,9 @@ from docopt import docopt
 
 
 
+# key_pattern = re.compile(r'.*00/.*\.html?', flags=re.IGNORECASE)
 key_pattern = re.compile(r'.*aserving/4/1/.*\.html?', flags=re.IGNORECASE)
-needle_pattern_max_occurrences = 2
+needle_pattern_max_count = 2
 needle_pattern = re.compile(
     r'GTM-M6R5RNQ',  # noqa
     flags=re.IGNORECASE | re.MULTILINE
@@ -66,9 +68,11 @@ def check_key(object_summary):
 
     to_replace = needle_pattern.findall(html)
 
-    if len(to_replace) > needle_pattern_max_occurrences:
-        # raise ValueError('More than %s match found in %s. Aborting.' % (needle_pattern_max_occurrences, object_summary.key))
-        sys.stdout.write('🌵  More than %s match found in %s. Skipping.\n\n' % (needle_pattern_max_occurrences, object_summary.key))
+    if len(to_replace) > needle_pattern_max_count:
+        # raise ValueError('More than %s match found in %s. Aborting.' % (needle_pattern_max_count, object_summary.key))
+        sys.stdout.write('\x1b[2K')
+        sys.stdout.write('\n%s\n' % ('-' * 125))
+        sys.stdout.write('🌵  More than %s match found in %s. Skipping.\n' % (needle_pattern_max_count, object_summary.key))
         save_backup(object_summary.key, html, backup_dir='backups/too_many_matches')
         return False, None, None
 
@@ -105,7 +109,7 @@ def replace_key_content(object_summary, new_content):
 
 
 def search_bucket(bucket, dont_replace=False, force_replace=False):
-    sys.stdout.write('\nSearching AWS bucket "%s"\n\n' % bucket.name)
+    sys.stdout.write('\n🍵  Searching AWS bucket "%s"\n\n' % bucket.name)
 
     for key in bucket.objects.all():
         if key_pattern.match(key.key):
@@ -115,10 +119,11 @@ def search_bucket(bucket, dont_replace=False, force_replace=False):
             matched, match_content, html = check_key(key)
 
             if matched:
+                sys.stdout.write('\x1b[2K')
+                sys.stdout.write('\n%s\n' % ('-' * 125))
+                sys.stdout.write('🌟  Match ("%s") found in "%s"\n' % (match_content[0], key.key))
+
                 for match in match_content:
-                    sys.stdout.write('\x1b[2K')
-                    sys.stdout.write('\n%s\n' % ('-' * 125))
-                    sys.stdout.write('🌟  Match ("%s") found in "%s"\n' % (match, key.key))
 
                     if dont_replace is True:
                         continue
@@ -133,12 +138,12 @@ def search_bucket(bucket, dont_replace=False, force_replace=False):
                         continue
 
 
-                    if confirm('Replace snippet in "%s"?' % key.key):
+                    if confirm('❓  Replace snippet in "%s"?' % key.key):
                         sys.stdout.write('✅  Replacing in "%s"\n' % key.key)
                         save_backup(key.key, html)
                         replace_key_content(
                             key,
-                            needle_pattern.sub(replace_with, html, count=1)
+                            needle_pattern.sub(replace_with, html, count=needle_pattern_max_count)
                         )
                     else:
                         sys.stdout.write('❌  Skipping in "%s"\n' % key.key)
