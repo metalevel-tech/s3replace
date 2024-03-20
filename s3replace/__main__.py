@@ -2,7 +2,7 @@
 Find and replace for an S3 bucket.
 
 Usage:
-  s3replace <bucket> [--dry-run] [--access-key-id=<key>] [--secret-access-key=<key>]
+  s3replace <bucket> [--dry-run] [--force-replace] [--access-key-id=<key>] [--secret-access-key=<key>]
   s3replace -h | --help
   s3replace --version
 
@@ -12,7 +12,9 @@ Options:
   --dry-run                 Don't replace.
   --access-key-id=<key>     AWS access key ID
   --secret-access-key=<key> AWS secret access key
+  --force-replace           Don't ask for confirmation before replacing.
 """
+
 from io import BytesIO
 from os import makedirs, path
 import re
@@ -22,12 +24,23 @@ from boto3.session import Session
 from docopt import docopt
 
 
-key_pattern = re.compile(r'.*\.html', flags=re.IGNORECASE)
+# Complex example
+# key_pattern = re.compile(r'.*\.html', flags=re.IGNORECASE)
+# needle_pattern = re.compile(
+#     r'<script .*[\n\r]{0,2}.*https?://s?res\.dallasnews\.com/reg/js/tp_jsinclude\.js.*[\n\r]{0,2}\s*</script>',  # noqa
+#     flags=re.IGNORECASE | re.MULTILINE
+# )
+# replace_with = '<script type="text/javascript" src="//interactives.dallasnews.com/common/templates/v1.1/js/meter.js"></script>'  # noqa
+
+
+
+key_pattern = re.compile(r'.*aserving/4/1/.*\.html?', flags=re.IGNORECASE)
+needle_pattern_max_occurrences = 2
 needle_pattern = re.compile(
-    r'<script .*[\n\r]{0,2}.*https?://s?res\.dallasnews\.com/reg/js/tp_jsinclude\.js.*[\n\r]{0,2}\s*</script>',  # noqa
+    r'GTM-M6R5RNQ',  # noqa
     flags=re.IGNORECASE | re.MULTILINE
 )
-replace_with = '<script type="text/javascript" src="//interactives.dallasnews.com/common/templates/v1.1/js/meter.js"></script>'  # noqa
+replace_with = 'GTM-MDG7QDW'  # noqa
 
 
 def confirm(prompt):
@@ -53,13 +66,15 @@ def check_key(object_summary):
 
     to_replace = needle_pattern.findall(html)
 
-    if len(to_replace) > 1:
-        raise ValueError(
-            'More than one match found in %s. Aborting.' % object_summary.key
-        )
+    if len(to_replace) > needle_pattern_max_occurrences:
+        # raise ValueError('More than %s match found in %s. Aborting.' % (needle_pattern_max_occurrences, object_summary.key))
+        sys.stdout.write('🌵  More than %s match found in %s. Skipping.\n\n' % (needle_pattern_max_occurrences, object_summary.key))
+        save_backup(object_summary.key, html, backup_dir='backups/too_many_matches')
+        return False, None, None
 
     if to_replace:
-        return True, to_replace[0], html
+        return True, to_replace, html
+
     return False, None, None
 
 
@@ -89,7 +104,7 @@ def replace_key_content(object_summary, new_content):
     object_summary.put(**new_obj_kwargs)
 
 
-def search_bucket(bucket, dont_replace=False):
+def search_bucket(bucket, dont_replace=False, force_replace=False):
     sys.stdout.write('\nSearching AWS bucket "%s"\n\n' % bucket.name)
 
     for key in bucket.objects.all():
@@ -100,31 +115,40 @@ def search_bucket(bucket, dont_replace=False):
             matched, match_content, html = check_key(key)
 
             if matched:
-                sys.stdout.write('\x1b[2K')
-                sys.stdout.write('\n\n%s\n' % ('-' * 125))
-                sys.stdout.write(match_content)
-                sys.stdout.write('\n%s\n\n' % ('-' * 125))
+                for match in match_content:
+                    sys.stdout.write('\x1b[2K')
+                    sys.stdout.write('\n%s\n' % ('-' * 125))
+                    sys.stdout.write('🌟  Match ("%s") found in "%s"\n' % (match, key.key))
 
-                if dont_replace is True:
-                    sys.stdout.write('Match found in "%s".\n' % key.key)
-                    continue
+                    if dont_replace is True:
+                        continue
 
-                if confirm('Replace snippet in "%s"?' % key.key):
-                    sys.stdout.write('✅  Replacing in "%s"\n' % key.key)
-                    save_backup(key.key, html)
-                    replace_key_content(
-                        key,
-                        needle_pattern.sub(replace_with, html)
-                    )
-                else:
-                    sys.stdout.write('❌  Skipping in "%s"\n' % key.key)
+                    if force_replace is True:
+                        sys.stdout.write('🚀  Replacing in "%s"\n\n' % key.key)
+                        save_backup(key.key, html)
+                        replace_key_content(
+                            key,
+                            needle_pattern.sub(replace_with, html, count=1)
+                        )
+                        continue
+
+
+                    if confirm('Replace snippet in "%s"?' % key.key):
+                        sys.stdout.write('✅  Replacing in "%s"\n' % key.key)
+                        save_backup(key.key, html)
+                        replace_key_content(
+                            key,
+                            needle_pattern.sub(replace_with, html, count=1)
+                        )
+                    else:
+                        sys.stdout.write('❌  Skipping in "%s"\n' % key.key)
         else:
             sys.stdout.write('\x1b[2K')
             sys.stdout.write('\r⏩  Skipping "%s"' % key.key)
 
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='0.0.1')
+    args = docopt(__doc__, version='0.0.2')
 
     session = Session(
         aws_access_key_id=args['--access-key-id'],
@@ -133,4 +157,4 @@ if __name__ == '__main__':
     s3 = session.resource('s3')
     bucket = s3.Bucket(args['<bucket>'])
 
-    search_bucket(bucket, dont_replace=args['--dry-run'])
+    search_bucket(bucket, dont_replace=args['--dry-run'], force_replace=args['--force-replace'])
