@@ -12,8 +12,8 @@ It uses the AWS API to roll through all of the objects in a bucket:
 
 ## Requirements
 
-- Python 3 - `brew install python`
-- `pipenv` - `brew install pipenv`
+- Python 3 - in Mac `brew install python` in Debian it is installed by default
+- `pipenv` - in Mac `brew install pipenv` in Debian `sudo apt install pipenv`
 
 ## Installation and setup
 
@@ -28,6 +28,8 @@ In _s3replace/__main__.py_:
 - update the `needle_pattern` at the top. This pattern will be used by `re.search` to find matching documents and it'll be the content that is replaced using `re.sub`.
 - set `replace_with` at the top of the file to the text you want to replace the `needle_pattern` with
 - update the `key_pattern` variable to match the keys you want to run `needle_pattern` against; the more specific this is, the better; files that match this won't be downloaded, which is the slowest part of the process
+- `needle_pattern_max_count` is the number of times `needle_pattern` should be found in the file before it is replaced, otherwise the file will be skipped, and a copy of it will be saved in `backups/too_many_matches`
+
 
 #### Running
 
@@ -39,7 +41,7 @@ $ python s3replace --help
 Find and replace for an S3 bucket.
 
 Usage:
-  s3replace <bucket> [--dry-run] [--access-key-id=<key>] [--secret-access-key=<key>]
+  s3replace <bucket> [--dry-run|--force-replace] [--access-key-id=<key>] [--secret-access-key=<key>]
   s3replace -h | --help
   s3replace --version
 
@@ -49,6 +51,7 @@ Options:
   --dry-run                 Don't replace.
   --access-key-id=<key>     AWS access key ID
   --secret-access-key=<key> AWS secret access key
+  --force-replace          Force replace without confirmation.
 ```
 
 Basic usage only requires a bucket name and credentials:
@@ -58,6 +61,12 @@ $ python s3replace <bucket> --access-key-id=<yourid> --secret-access-key=<yourke
 ```
 
 You can pass your AWS credentials using the flags, as above, or you can provide them using any of the [other methods](http://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration) supported by `boto3`.
+
+## Get list of the backup files
+
+```bash
+find backups/ -type f -printf '%d\t%P\n' | sort -r -nk1 | cut -f2-
+```
 
 ## Copyright
 

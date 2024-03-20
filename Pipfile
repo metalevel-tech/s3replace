@@ -5,9 +5,9 @@ name = "pypi"
 
 [packages]
 docopt = "==0.6.2"
-"boto3" = "*"
+boto3 = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "3.6"
+python_version = ">=3.6"
