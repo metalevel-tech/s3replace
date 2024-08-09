@@ -19,27 +19,39 @@ from io import BytesIO
 from os import makedirs, path
 import re
 import sys
-
+import datetime
+import logging
 from boto3.session import Session
 from docopt import docopt
 
-
-# Complex example
-# key_pattern = re.compile(r'.*\.html', flags=re.IGNORECASE)
-# needle_pattern_max_count = 1
-# needle_pattern = re.compile(
-#     r'<script .*[\n\r]{0,2}.*https?://s?res\.dallasnews\.com/reg/js/tp_jsinclude\.js.*[\n\r]{0,2}\s*</script>',  # noqa
-#     flags=re.IGNORECASE | re.MULTILINE
-# )
-# replace_with = '<script type="text/javascript" src="//interactives.dallasnews.com/common/templates/v1.1/js/meter.js"></script>'  # noqa
-
-key_pattern = re.compile(r'.*aserving/4/1/.*\.html?', flags=re.IGNORECASE)
+# Search section
+#
+#                         '^aserving/4/1/.*\.html?' >> 0 - tests, 1 - prod tree
+key_pattern = re.compile(r'^aserving/4/0/.*\.html?', flags=re.IGNORECASE)
+search_barrier = re.compile(r'\<title\>TradeLG\<\/title\>', flags=re.IGNORECASE | re.MULTILINE)
+needle_pattern_list = [
+  # (needle_pattern, replace_with)
+    (re.compile( r'href="(?:https?://|//)advercenter.com/?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net"'),
+    (re.compile( r'href="(?:https?://|//)advercenter.com/terms.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/terms-and-conditions"'),
+    (re.compile( r'href="(?:https?://|//)advercenter.com/privacy.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/privacy-policy"'),
+    (re.compile( r'href="(?:https?://|//)advercenter.com/contact.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/contact-us"'),
+]
 needle_pattern_max_count = 2
-needle_pattern = re.compile(
-    r'GTM-M6R5RNQ',  # noqa
-    flags=re.IGNORECASE | re.MULTILINE
+
+# Setup logging
+log_dir = './logs'
+log_file_name = path.join(log_dir, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S.log'))
+if not path.exists(log_dir):
+    makedirs(log_dir)
+fh = logging.FileHandler(log_file_name)
+fh.setLevel(logging.DEBUG)
+logging.basicConfig(
+    level=logging.INFO,
+    format="",
+    # format="%(asctime)s - %(levelname)s - \n%(message)s",
+    handlers=[fh]
 )
-replace_with = 'GTM-MDG7QDW'  # noqa
+processed_objects_counter = 0
 
 
 def confirm(prompt):
@@ -49,46 +61,23 @@ def confirm(prompt):
     return answer.lower() == 'y'
 
 
-def check_key(object_summary):
-    content = BytesIO()
-    object = object_summary.Object()
-    object.download_fileobj(content)
-
-    try:
-        html = content.getvalue().decode('UTF-8')
-    except UnicodeDecodeError as err:
-        sys.stdout.write('Error reading "%s": %s' % (
-            object_summary.key,
-            str(err),
-        ))
-        return False, None, None
-
-    to_replace = needle_pattern.findall(html)
-
-    if len(to_replace) > needle_pattern_max_count:
-        # raise ValueError('More than %s match found in %s. Aborting.' % (needle_pattern_max_count, object_summary.key))
-        sys.stdout.write('\x1b[2K')
-        sys.stdout.write('\n%s\n' % ('-' * 125))
-        sys.stdout.write('🌵  More than %s match found in %s. Skipping.\n' % (needle_pattern_max_count, object_summary.key))
-        save_backup(object_summary.key, html, backup_dir='backups/too_many_matches')
-        return False, None, None
-
-    if to_replace:
-        return True, to_replace, html
-
-    return False, None, None
-
-
 def save_backup(key_name, content, backup_dir='backups'):
     local_key_name = path.join(backup_dir, key_name)
+
+    if path.exists(local_key_name):
+        sys.stdout.write('💾  Skipping backup for "%s"\n\n' % key_name)
+        return
+
     makedirs(path.dirname(local_key_name), exist_ok=True)
 
     with open(local_key_name, 'w') as backup_file:
         backup_file.write(content)
 
+    sys.stdout.write('💾  Backup created for "%s"\n\n' % key_name)
 
-def replace_key_content(object_summary, new_content):
-    existing_obj = object_summary.get()
+
+def replace_object_content(key_object, new_content):
+    existing_obj = key_object.get()
     new_obj_kwargs = dict(
         ACL='public-read',
         Body=new_content.encode('UTF-8')
@@ -102,47 +91,93 @@ def replace_key_content(object_summary, new_content):
     if existing_obj['Metadata']:
         new_obj_kwargs['Metadata'] = existing_obj['Metadata']
 
-    object_summary.put(**new_obj_kwargs)
+    key_object.put(**new_obj_kwargs)
 
+
+def check_key_object(key_object, dont_replace=False, force_replace=False):
+    content = BytesIO()
+    object = key_object.Object()
+    object.download_fileobj(content)
+
+    try:
+        html = content.getvalue().decode('UTF-8')
+    except UnicodeDecodeError as err:
+        sys.stdout.write('Error reading "%s": %s' % (
+            key_object.key,
+            str(err),
+        ))
+        return False
+
+    if not search_barrier.search(html):
+        sys.stdout.write('\x1b[2K')
+        sys.stdout.write('\r⏩  Skipping "%s"' % key_object.key)
+        return False
+
+    global processed_objects_counter
+    processed_objects_counter += 1
+
+    sys.stdout.write('\x1b[2K')
+    sys.stdout.write('\n%s\n' % ('-' * 50))
+    sys.stdout.write('🌟  Check object [%s]: %s\n\n' % (processed_objects_counter, key_object.key))
+    logging.info(f'\n{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nCheck object [{processed_objects_counter}]: {key_object.key}')
+
+    counter = 0
+    new_html = html
+
+    for needle_pattern, replace_with in needle_pattern_list:
+        to_replace = needle_pattern.findall(new_html)
+
+        if len(to_replace) > needle_pattern_max_count:
+            # raise ValueError('More than %s match found in %s. Aborting.' % (needle_pattern_max_count, key_object.key))
+            sys.stdout.write('\x1b[2K')
+            sys.stdout.write('\n%s\n' % ('-' * 50))
+            sys.stdout.write('🌵  More than %s match found for %s. Skipping.\n' % (needle_pattern_max_count, to_replace))
+            save_backup(key_object.key, html, backup_dir='backups/too_many_matches')
+            continue
+        else:
+            if to_replace and len(to_replace) > 0 and to_replace[0]:
+                new_html = needle_pattern.sub(replace_with, new_html, count=needle_pattern_max_count)
+                counter += 1
+                sys.stdout.write('[%d] %s\n    %s\n' % (counter, to_replace[0], replace_with))
+                logging.info('[%d] %s\n    %s' % (counter, to_replace[0], replace_with))
+
+    if to_replace:
+        if dont_replace is True:
+            return True
+        if force_replace is True:
+            sys.stdout.write('🚀  Replacing in "%s"\n' % key_object.key)
+            save_backup(key_object.key, html)
+            replace_object_content(key_object, new_html)
+            logging.info(f'Replace object: {key_object.key}')
+            return True
+        if confirm('❓  Replace snippet in "%s"?' % key_object.key):
+            sys.stdout.write('✅  Replacing in "%s"\n' % key_object.key)
+            save_backup(key_object.key, html)
+            replace_object_content(key_object, new_html)
+            logging.info(f'Replace object: {key_object.key}')
+        else:
+            sys.stdout.write('❌  Skipping in "%s"\n' % key_object.key)
+            logging.info(f'Replace object skipped: {key_object.key}')
+
+    sys.stdout.write('\n')
+    return True
 
 def search_bucket(bucket, dont_replace=False, force_replace=False):
-    sys.stdout.write('\n🍵  Searching AWS bucket "%s"\n\n' % bucket.name)
+    try:
+        sys.stdout.write('\n🍵  Searching AWS bucket "%s"\n\n' % bucket.name)
+        logging.info(f'\n{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n> Search bucket: {bucket.name}\n> Replace: {not dont_replace}\n> Dry run: {dont_replace}\n> Force: {force_replace}\n> Key pattern: {key_pattern.pattern}\n> Search barrier: {search_barrier.pattern}')
 
-    for key in bucket.objects.all():
-        if key_pattern.match(key.key):
-            sys.stdout.write('\x1b[2K')
-            sys.stdout.write('\r🔍  Checking "%s"' % key.key)
-
-            matched, match_content, html = check_key(key)
-
-            if matched:
+        for key in bucket.objects.all():
+            if key_pattern.match(key.key):
+                sys.stdout.write('\x1b[2K') # Erase previous line
+                sys.stdout.write('\r🔍  Checking "%s"' % key.key) # Write the searched key name
+                check_key_object(key, dont_replace=dont_replace, force_replace=force_replace)
+            else:
                 sys.stdout.write('\x1b[2K')
-                sys.stdout.write('\n%s\n' % ('-' * 125))
-                sys.stdout.write('🌟  Match ("%s") found in "%s"\n' % (match_content[0], key.key))
+                sys.stdout.write('\r⏩  Skipping "%s"' % key.key)
 
-                # for match in match_content:
-                if dont_replace is True:
-                    continue
-                if force_replace is True:
-                    sys.stdout.write('🚀  Replacing in "%s"\n\n' % key.key)
-                    save_backup(key.key, html)
-                    replace_key_content(
-                        key,
-                        needle_pattern.sub(replace_with, html, count=needle_pattern_max_count)
-                    )
-                    continue
-                if confirm('❓  Replace snippet in "%s"?' % key.key):
-                    sys.stdout.write('✅  Replacing in "%s"\n' % key.key)
-                    save_backup(key.key, html)
-                    replace_key_content(
-                        key,
-                        needle_pattern.sub(replace_with, html, count=needle_pattern_max_count)
-                    )
-                else:
-                    sys.stdout.write('❌  Skipping in "%s"\n' % key.key)
-        else:
-            sys.stdout.write('\x1b[2K')
-            sys.stdout.write('\r⏩  Skipping "%s"' % key.key)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == '__main__':
@@ -152,6 +187,7 @@ if __name__ == '__main__':
         aws_access_key_id=args['--access-key-id'],
         aws_secret_access_key=args['--secret-access-key'],
     )
+
     s3 = session.resource('s3')
     bucket = s3.Bucket(args['<bucket>'])
 
