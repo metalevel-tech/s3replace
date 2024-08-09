@@ -1,15 +1,23 @@
 # s3replace
 
-![Screenshot](/etc/preview.png?raw=true)
+_This repository is based on [DallasMorningNews/s3replace](https://github.com/DallasMorningNews/s3replace)_
+
+![Screenshot](/etc/s3replace-cover.webp?raw=true)
 
 Sometimes we have to replace the same thing in lots of files in an S3 bucket - for example, when the paywall code changes or when we switch commenting vendors. This repo is our automated solution.
 
 It uses the AWS API to roll through all of the objects in a bucket:
 
 1. Filtering the objects to search using a regular expression, it downloads any object that matches.
-2. Of those objects that match, it uses another regular expression to find the relevant code to replace.
-3. If the object's content is a match, you'll be given a preview and asked for confirmation before anything is changed.
-4. It replaces the code, copying metadata such as the `ContentType`, `ContentDisposition` and other key fields. A backup of the file is saved locally, just in case.
+2. Of those objects that match, it uses another regular expression to check does the content match to the requirements.
+3. Then iterate over on an array of regular expressions to find the relevant code to replace.
+4. If the object's content is a match:
+   - In the standard mode you'll be given a preview and asked for confirmation before anything is changed.
+   - In the force mode the file will be overridden without confirmation.
+   - In the dry run mode only the preview will be shown.
+5. It replaces the code, copying metadata such as the `ContentType`, `ContentDisposition` and other key fields.
+   - A backup of the file is saved locally, just in case.
+   - Log for each change or match will be written to a log file.
 
 ## Requirements
 
@@ -52,13 +60,13 @@ python s3replace --help
 Find and replace for an S3 bucket.
 
 Usage:
-  s3replace <bucket> [--dry-run|--force-replace] [--access-key-id=<key>] [--secret-access-key=<key>]
+  s3replace <bucket> [|--dry-run|--force-replace] --access-key-id=<key> --secret-access-key=<key>
   s3replace -h | --help
   s3replace --version
 
 Options:
-  -h --help                 Show this screen.
-  --dry-run                 Don't replace.
+  --help                    Show this screen.
+  --dry-run                 Do not replace.
   --force-replace           Replace without confirmation.
   --version                 Show version.
 

@@ -118,7 +118,7 @@ def check_key_object(key_object, dont_replace=False, force_replace=False):
 
     sys.stdout.write('\x1b[2K')
     sys.stdout.write('\n%s\n' % ('-' * 50))
-    sys.stdout.write('🌟  Check object [{processed_objects_counter}]: %s\n\n' % key_object.key)
+    sys.stdout.write('🌟  Check object [%s]: %s\n\n' % (processed_objects_counter, key_object.key))
     logging.info(f'\n{datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\nCheck object [{processed_objects_counter}]: {key_object.key}')
 
     counter = 0
