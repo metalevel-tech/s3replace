@@ -9,6 +9,9 @@
     "levelname",
     "pipenv",
     "plexop",
+    "tradelgcontact",
+    "tradelgprivacypolicy",
+    "tradelgterms",
     "xampp"
   ]
 }
