@@ -60,7 +60,7 @@ python s3replace --help
 Find and replace for an S3 bucket.
 
 Usage:
-  s3replace <bucket> [|--dry-run|--force-replace] --access-key-id=<key> --secret-access-key=<key>
+  s3replace <bucket> [--dry-run|--force-replace] --access-key-id=<key> --secret-access-key=<key>
   s3replace -h | --help
   s3replace --version
 
