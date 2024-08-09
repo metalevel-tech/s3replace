@@ -5,6 +5,7 @@
 Sometimes we have to replace the same thing in lots of files in an S3 bucket - for example, when the paywall code changes or when we switch commenting vendors. This repo is our automated solution.
 
 It uses the AWS API to roll through all of the objects in a bucket:
+
 1. Filtering the objects to search using a regular expression, it downloads any object that matches.
 2. Of those objects that match, it uses another regular expression to find the relevant code to replace.
 3. If the object's content is a match, you'll be given a preview and asked for confirmation before anything is changed.
@@ -22,22 +23,32 @@ It uses the AWS API to roll through all of the objects in a bucket:
 
 ## Usage
 
-#### Configuration
+### Configuration
 
 In _s3replace/__main__.py_:
-- update the `needle_pattern` at the top. This pattern will be used by `re.search` to find matching documents and it'll be the content that is replaced using `re.sub`.
-- set `replace_with` at the top of the file to the text you want to replace the `needle_pattern` with
-- update the `key_pattern` variable to match the keys you want to run `needle_pattern` against; the more specific this is, the better; files that match this won't be downloaded, which is the slowest part of the process
+
+- Update the `needle_pattern` at the top. This pattern will be used by `re.search` to find matching documents and it'll be the content that is replaced using `re.sub`.
+
+- Set the `needle_pattern_list` array, each pair consists of:
+  - set `replace_with` at the top of the file to the text you want to replace the `needle_pattern` with
+  - update the `key_pattern` variable to match the keys you want to run `needle_pattern` against; the more specific this is, the better; files that match this won't be downloaded, which is the slowest part of the process
 - `needle_pattern_max_count` is the number of times `needle_pattern` should be found in the file before it is replaced, otherwise the file will be skipped, and a copy of it will be saved in `backups/too_many_matches`
 
+### Backup and logging
 
-#### Running
+The script automatically creates backup of the original content of the objects/files im `backups/`. If a backup copy exists it it won't be overwritten.
+
+The script also writes log files in the `logs/` directory.
+
+### Running
 
 This runs as a command line tool. See all the options by running `python s3replace --help`:
 
+```bash
+python s3replace --help
 ```
-$ python s3replace --help
 
+```bash
 Find and replace for an S3 bucket.
 
 Usage:
@@ -47,17 +58,18 @@ Usage:
 
 Options:
   -h --help                 Show this screen.
-  --version                 Show version.
   --dry-run                 Don't replace.
+  --force-replace           Replace without confirmation.
+  --version                 Show version.
+
   --access-key-id=<key>     AWS access key ID
   --secret-access-key=<key> AWS secret access key
-  --force-replace          Force replace without confirmation.
 ```
 
 Basic usage only requires a bucket name and credentials:
 
 ```sh
-$ python s3replace <bucket> --access-key-id=<yourid> --secret-access-key=<yourkey>
+python s3replace <bucket> --dry-run --access-key-id=<your_id> --secret-access-key=<your_key>
 ```
 
 You can pass your AWS credentials using the flags, as above, or you can provide them using any of the [other methods](http://boto3.readthedocs.io/en/latest/guide/quickstart.html#configuration) supported by `boto3`.
@@ -68,6 +80,8 @@ You can pass your AWS credentials using the flags, as above, or you can provide 
 find backups/ -type f -printf '%d\t%P\n' | sort -r -nk1 | cut -f2-
 ```
 
-## Copyright
+## Upload test content
 
-&copy; 2018 _The Dallas Morning News_
+```bash
+aws --profile plexop s3 cp /mnt/c/xampp/htdocs/Creative/aserving-4/0-szs-test/ "s3://static-plexop/aserving/4/0/" --recursive
+```
