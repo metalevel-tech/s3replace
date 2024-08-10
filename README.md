@@ -109,6 +109,12 @@ cd backups
 find aserving/ -type f | sort -u | sed 's#^#https://static-plexop.s3.amazonaws.com/#' > pages.log
 ```
 
+Check if there are any differences between the two lists.
+
+```bash
+diff -c backups/pages.log logs/pages.log
+```
+
 Create backup of the collected data.
 
 ```bash
