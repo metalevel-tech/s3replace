@@ -88,8 +88,29 @@ You can pass your AWS credentials using the flags, as above, or you can provide 
 find backups/ -type f -printf '%d\t%P\n' | sort -r -nk1 | cut -f2-
 ```
 
-## Upload test content
+## Helpers
+
+Upload test content.
 
 ```bash
 aws --profile plexop s3 cp /mnt/c/xampp/htdocs/Creative/aserving-4/0-szs-test/ "s3://static-plexop/aserving/4/0/" --recursive
+```
+
+Create a list of the changed files/pages from the logs.
+
+```bash
+cat logs/*log | grep -Po '^Replace object:.*$' | sort -u | sed 's#Replace object: #https://static-plexop.s3.amazonaws.com/#' > logs/pages.log
+```
+
+Create a list of the changed files/pages from the backup directory.
+
+```bash
+cd backups
+find aserving/ -type f | sort -u | sed 's#^#https://static-plexop.s3.amazonaws.com/#' > pages.log
+```
+
+Create backup of the collected data.
+
+```bash
+tar -zcvf backup.tgz backups logs
 ```
