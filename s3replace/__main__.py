@@ -26,7 +26,7 @@ from docopt import docopt
 
 # Search section
 #
-#                         '^aserving/4/1/.*\.html?' >> 0 - tests, 1 - prod tree
+#                       '^aserving/4/(0|1)/.*\.html?' >> 0 - tests, 1 - prod tree
 key_pattern = re.compile(r'^aserving/4/0/.*\.html?', flags=re.IGNORECASE)
 search_barrier = re.compile(r'\<title\>TradeLG\<\/title\>', flags=re.IGNORECASE | re.MULTILINE)
 needle_pattern_list = [
@@ -35,8 +35,11 @@ needle_pattern_list = [
     (re.compile( r'href="(?:https?://|//)advercenter.com/terms.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/terms-and-conditions"'),
     (re.compile( r'href="(?:https?://|//)advercenter.com/privacy.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/privacy-policy"'),
     (re.compile( r'href="(?:https?://|//)advercenter.com/contact.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/contact-us"'),
+    (re.compile( r'href="(?:https?://|//)advercenter.com/files/tradelgterms.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/terms-and-conditions"'),
+    (re.compile( r'href="(?:https?://|//)advercenter.com/files/tradelgprivacypolicy.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/privacy-policy"'),
+    (re.compile( r'href="(?:https?://|//)advercenter.com/files/tradelgcontact.*?"', flags=re.IGNORECASE | re.MULTILINE ), 'href="https://www.tradelg.net/contact-us"'),
 ]
-needle_pattern_max_count = 2
+needle_pattern_max_count = 10
 
 # Setup logging
 log_dir = './logs'
@@ -93,7 +96,6 @@ def replace_object_content(key_object, new_content):
 
     key_object.put(**new_obj_kwargs)
 
-
 def check_key_object(key_object, dont_replace=False, force_replace=False):
     content = BytesIO()
     object = key_object.Object()
@@ -123,6 +125,7 @@ def check_key_object(key_object, dont_replace=False, force_replace=False):
 
     counter = 0
     new_html = html
+    do_replace = False
 
     for needle_pattern, replace_with in needle_pattern_list:
         to_replace = needle_pattern.findall(new_html)
@@ -136,12 +139,14 @@ def check_key_object(key_object, dont_replace=False, force_replace=False):
             continue
         else:
             if to_replace and len(to_replace) > 0 and to_replace[0]:
+                do_replace = True
                 new_html = needle_pattern.sub(replace_with, new_html, count=needle_pattern_max_count)
                 counter += 1
                 sys.stdout.write('[%d] %s\n    %s\n' % (counter, to_replace[0], replace_with))
                 logging.info('[%d] %s\n    %s' % (counter, to_replace[0], replace_with))
 
-    if to_replace:
+
+    if do_replace is True:
         if dont_replace is True:
             return True
         if force_replace is True:
